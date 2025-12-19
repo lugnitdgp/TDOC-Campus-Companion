@@ -111,23 +111,26 @@ Model: mistralai/Mistral-7B-Instruct-v0.2
 # IMPORTS
 # ===========================================================================
 
+from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
+from langchain_core.messages import HumanMessage, SystemMessage
+from dotenv import load_dotenv
 
 # ============================================================================
 # ENVIRONMENT SETUP
 # ============================================================================
+load_dotenv()
 
+def fallback_ai_response(query:str) ->str:
 
-
-   # return (
-   #      "I'm **Campus Companion**, designed to assist specifically with campus-related information such as:\n\n"
-   #      "📞 Contact details (faculty, canteen, hostel, administration)\n\n"
-   #      "📍 Building, room, and facility locations\n\n"
-   #      "📚 Academic rules, CGPA policies, and hostel guidelines\n\n"
-   #      "For the best help, please ask something related to your campus. I'll be happy to assist!"
-   #  )
 
 # ===========================================================================
 # MAIN FUNCTION: FALLBACK AI RESPONSE
 # ===========================================================================
 
-
+   return (
+        "I'm **Campus Companion**, designed to assist specifically with campus-related information such as:\n\n"
+        "Contact details (faculty, canteen, hostel, administration)\n\n"
+        "Building, room, and facility locations\n\n"
+        "Academic rules, CGPA policies, and hostel guidelines\n\n"
+        "For the best help, please ask something related to your campus. I'll be happy to assist!"
+    )
