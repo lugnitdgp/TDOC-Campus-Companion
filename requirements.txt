@@ -1,0 +1,133 @@
+# ============================================================================
+# CAMPUS COMPANION - Requirements File
+# ============================================================================
+# Complete list of all Python dependencies with versions
+# Last updated: December 2024
+# Python version: 3.13+
+# ============================================================================
+
+# Core Web Framework
+# ----------------------------------------------------------------------------
+fastapi==0.124.0                 # Modern, fast web framework for building APIs
+uvicorn==0.38.0                  # Lightning-fast ASGI server
+starlette==0.50.0                # FastAPI dependency for web serving
+
+# Database & ORM
+# ----------------------------------------------------------------------------
+sqlmodel==0.0.27                 # SQL databases with Python type annotations
+SQLAlchemy==2.0.44               # Database toolkit and ORM
+pgvector==0.4.2                  # PostgreSQL vector extension support
+
+# AI & Machine Learning
+# ----------------------------------------------------------------------------
+# LangChain for LLM integration
+langchain>=1.0.0                 # Framework for LLM applications
+langchain-core>=0.3.0            # Core LangChain abstractions
+langchain-huggingface>=1.0.0     # HuggingFace integration for LangChain
+
+# HuggingFace ecosystem
+huggingface-hub==0.36.0          # Interface to HuggingFace Hub
+transformers==4.57.3             # State-of-the-art NLP models
+tokenizers==0.22.1               # Fast tokenizers for transformers
+
+# Embeddings & Vector Search
+sentence-transformers==5.1.2     # Text embedding models (384-dim vectors)
+torch==2.9.1                     # PyTorch deep learning framework
+
+# ML Utilities
+scikit-learn==1.7.2              # ML library (TF-IDF, Logistic Regression)
+numpy==2.3.5                     # Numerical computing
+scipy==1.16.3                    # Scientific computing utilities
+joblib==1.5.2                    # Model serialization
+
+# Environment & Configuration
+# ----------------------------------------------------------------------------
+python-dotenv==1.0.1             # Load environment variables from .env file
+
+# Data Processing & Validation
+# ----------------------------------------------------------------------------
+pydantic==2.12.5                 # Data validation using Python type hints
+pydantic_core==2.41.5            # Core validation logic for Pydantic
+annotated-types==0.7.0           # Type annotations support
+
+# File & Network Operations
+# ----------------------------------------------------------------------------
+pillow==12.0.0                   # Image processing library
+requests==2.32.5                 # HTTP library for API calls
+urllib3==2.6.1                   # HTTP client
+certifi==2025.11.12              # SSL certificates
+
+# Security & Encoding
+# ----------------------------------------------------------------------------
+charset-normalizer==3.4.4        # Character encoding detection
+idna==3.11                       # Internationalized domain names
+
+# Utility Libraries
+# ----------------------------------------------------------------------------
+tqdm==4.67.1                     # Progress bars for loops
+click==8.3.1                     # Command-line interface creation
+PyYAML==6.0.3                    # YAML parser and emitter
+regex==2025.11.3                 # Advanced regular expressions
+
+# Storage & Serialization
+# ----------------------------------------------------------------------------
+safetensors==0.7.0               # Safe tensor serialization
+filelock==3.20.0                 # Platform-independent file locking
+fsspec==2025.12.0                # Filesystem abstraction
+
+# Template & Markup
+# ----------------------------------------------------------------------------
+Jinja2==3.1.6                    # Template engine
+MarkupSafe==3.0.3                # XML/HTML string safety
+
+# Networking
+# ----------------------------------------------------------------------------
+anyio==4.12.0                    # Async I/O abstraction
+h11==0.16.0                      # HTTP/1.1 protocol implementation
+
+# Math & Symbolic Computing
+# ----------------------------------------------------------------------------
+sympy==1.14.0                    # Symbolic mathematics
+mpmath==1.3.0                    # Arbitrary-precision arithmetic
+networkx==3.6.1                  # Complex networks library
+
+# Concurrency & Performance
+# ----------------------------------------------------------------------------
+threadpoolctl==3.6.0             # Thread pool control
+
+# Type Checking
+# ----------------------------------------------------------------------------
+typing-inspection==0.4.2         # Runtime inspection of types
+typing_extensions==4.15.0        # Backported typing features
+
+# Build Tools
+# ----------------------------------------------------------------------------
+setuptools==80.9.0               # Build system
+packaging==25.0                  # Core packaging utilities
+
+# Additional Dependencies
+# ----------------------------------------------------------------------------
+annotated-doc==0.0.4             # Documentation annotations
+hf-xet==1.2.0                    # HuggingFace Xet integration
+
+# ============================================================================
+# Installation Instructions:
+# ============================================================================
+# 1. Create virtual environment:
+#    python3 -m venv venv
+#    source venv/bin/activate  # On Windows: venv\Scripts\activate
+#
+# 2. Install all dependencies:
+#    pip install -r requirements.txt
+#
+# 3. Verify installation:
+#    pip list
+#
+# ============================================================================
+# Notes:
+# ============================================================================
+# - PyTorch (torch==2.9.1) is large (~2GB) and takes time to install
+# - Sentence-transformers downloads models (~90MB) on first use
+# - Total installation size: ~4-5GB
+# - Installation time: ~5-10 minutes depending on internet speed
+# ============================================================================
