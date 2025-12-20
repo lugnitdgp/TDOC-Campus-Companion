@@ -156,9 +156,65 @@ Smaller Chunks (More Precise):
 # ===========================================================================
 # IMPORTS
 # ===========================================================================
-
+from typing import List,Dict
+import re
 
 
 # ===========================================================================
 # TEXT CHUNKER CLASS
 # ===========================================================================
+
+class TextChunker:
+    
+    def __init__(self,chunk_size:int=512, chunk_overlap:int=50):
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
+
+    def chunk_text(self,text:str,metadata:Dict=None)->List[Dict]:
+        
+        text = self._clean_text(text)
+
+        words = text.split()
+
+        if len(words)<=self.chunk_size:
+            return [{
+                'text' : text,
+                'metadata' : metadata or {},
+                'length' : len(words)
+            }]
+        
+        chunks = []
+        i=0
+
+        while i<len(words):
+            
+            chunk_words = words[i:i+self.chunk_size]
+            chunk_text = " ".join(chunk_words)
+
+            chunks.append({
+                'text':chunk_text,
+                'metadata':metadata or {},
+                'length':len(chunk_words)
+            })
+          
+            i += self.chunk_size - self.chunk_overlap
+
+            if self.chunk_overlap>=self.chunk_size:
+                i+=1
+
+        return chunks
+    
+    def _clean_text(self,text:str)->str:
+        
+        text = re.sub(r'\s+',' ',text)
+
+        text = re.sub(r'[^\w\s.,!?;:()\-]','',text)
+
+        return text.strip()
+    
+    def _split_sentences(self,text:str)->List[str]:
+        
+        sentences = re.split(r'(?<=[.!?])\s+',text)
+        return [s.strip() for s in sentences if s.strip()]
+    
+        

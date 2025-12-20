@@ -145,14 +145,116 @@ Slow OCR performance:
 # IMPORTS
 # ══════════════════════════════════════════════════════════════════════
 
+import os
+import logging
+from pathlib import Path
+from typing import List,Dict
 
+import PyPDF2
+import pytesseract
+from pdf2image import convert_from_path
+from PIL import Image
 
 # ═══════════════════════════════════════════════════════════════════════
 # LOGGING CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # ===========================================================================
 # PDF PROCESSOR CLASS
 # ===========================================================================
 
+class PDFProcessor:
+    
+    def __init__(self,ocr_enabled:bool = True):
+        self.ocr_enabled = ocr_enabled
+
+    def extract_text_from_pdf(self,pdf_path:str)->Dict[str,any]:
+        
+        pdf_path = Path(pdf_path)
+
+        if not pdf_path.exists():
+            raise FileNotFoundError(f"PDF not found:{pdf_path}")
+        
+        logger.info(f"Processing:{pdf_path.name}")
+
+        text=self._extract_text_pypdf(pdf_path)
+        method="text_extraction"
+
+        if not text or len(text.strip())<100:
+            
+            if self.ocr_enabled:
+                logger.info(f"Text extraction insufficient.Using OCR for {pdf_path.name}")
+                text = self._extract_text_ocr(pdf_path)
+                method = "ocr"
+            else:
+                logger.warning(f"OCR disabled.Skipping {pdf_path.name}")
+
+        with open(pdf_path,'rb') as f:
+            pdf_reader = PyPDF2.PdfReader(f)
+            page_count = len(pdf_reader.pages)
+
+        return{
+            'filename':pdf_path.name,
+            'text':text.strip(),
+            'pages':page_count,
+            'method':method,
+            'path':str(pdf_path)
+        }  
+
+    def _extract_text_pypdf(self,pdf_path:Path)->str:
+
+        try :
+            with open(pdf_path,'rb') as f:
+                pdf_reader = PyPDF2.PdfReader(f)
+                text = ""
+
+                for page in pdf_reader.pages:
+                    text+= page.extract_text()+"\n"
+                return text
+        except Exception as e:
+            logger.error(f"PyPDF2 extraction failed : {e}")
+            return ""
+    
+    def _extract_text_ocr(self,pdf_path: Path) -> str:
+        try:
+            images = convert_from_path(pdf_path,dpi=300)
+            text= ""
+
+            for i, image in enumerate(images):
+                logger.info(f"OCR processing page {i+1}/{len(images)}")
+
+                page_text = pytesseract.image_to_string(image,lang='eng')
+
+                text+= page_text+'\n'
+            return text
+        
+        except Exception as e:
+            logger.error(f"OCR extraction failed:{e}") 
+            return ""
+
+    def process_directory(self,pdf_dir:str)-> List[Dict]:
+        pdf_dir=Path(pdf_dir)
+
+        pdf_files = list(pdf_dir.glob('*.pdf'))
+
+        if not pdf_files:
+            logger.warning(f"No PDF files found in {pdf_dir}")
+            return []
+        
+        logger.info(f"Found {len(pdf_files)} PDF files")
+
+        results = []
+
+        for pdf_file in pdf_files:
+            
+            try:
+                result = self.extract_text_from_pdf(pdf_file)
+                result.append(result)
+            
+            except Exception as e:
+                logger.error(f"failed to process {pdf_file.name}:{e}")
+
+        return results

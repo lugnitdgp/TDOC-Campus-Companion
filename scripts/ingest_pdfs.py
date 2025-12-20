@@ -219,19 +219,31 @@ Error: "Out of memory"
 # ===========================================================================
 # IMPORTS
 # ===========================================================================
-
+import os
+import sys
+from pathlib import Path
+import logging
+from typing import List,Dict
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # ADD PROJECT ROOT TO PYTHON PATH
 # ═══════════════════════════════════════════════════════════════════════
 
+project_root = Path(__file__).parent.parent
+sys.path.insert(0,str(project_root))
 
 
 
 # ══════════════════════════════════════════════════════════════════════
 # STANDARD LIBRARIES
 # ══════════════════════════════════════════════════════════════════════
+
+from scripts.pdf_processor import PDFProcessor
+from scripts.chunking import TextChunker
+import chromadb
+from chromadb.config import Settings
+from chromadb.utils import embedding_functions
 
 
 
@@ -240,15 +252,52 @@ Error: "Out of memory"
 # LOGGING CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════
 
+logging.basicConfig(level=logging.info)
+logger = logging.getLogger(__name__)
 
 
 # ═════════════════════════════════════════════════════════════════════
 # PDF TO VECTOR DB INGESTION PIPELINE
 # ═════════════════════════════════════════════════════════════════════
 
+class PDFIngestionPipeline:
+    
+    def __init__(
+        self,
+        pdf_dir: str = "data/pdfs",
+        db_path: str = "data/rag_docs",
+        collection_name:str = "campus_docs",
+        chunk_size:int = 512,
+        chunk_overlap:int =50
+    ):
+        self.pdf_dir = Path(pdf_dir)
+        self.db_path = Path(db_path)
+        self.collection_name = collection_name
 
+        self.pdf_processor = PDFProcessor(ocr_enabled=True)
+        self.chunker = TextChunker(chunk_size,chunk_overlap)
 
+        try:
+            
+            self.client = chromadb.PersistentClient(
+                path = str(self.db_path),
+                settings=Settings(anonymized_telemetry=False)
+            )
 
+            sentence_transformer_ef = embedding_functions.SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
+
+            self.collection =self.client.get_or_create_collection(
+                name=self.collection_name,
+                embedding_function=sentence_transformer_ef,
+                metadata={'description':"campus documents for rag"}
+                )
+            
+            logger.info(f"chroma db is initialized {self.db_path}")
+
+        except Exception as e:
+            logger.error(f"failed to initialize the chromadb : {e}")
+            return RuntimeError(f"chromadb initialization failed:{e}")
+            
 # ══════════════════════════════════════════════════════════════════════
 # MAIN EXECUTION
 # ══════════════════════════════════════════════════════════════════════
