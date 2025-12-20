@@ -289,7 +289,23 @@ Slow Queries:
 # LEGACY QUERY FUNCTION FOR BACKWARD COMPATIBILITY
 # ══════════════════════════════════════════════════════════════════════
 
+# def query_rag(query: str, top_k: int = 3) -> List[Dict[str, Any]]:
+#         try:
+#           rag_system = RAGSystem()
+#           documents = rag_system.search_documents(query, top_k=top_k)
+#           results = []
+#           for doc in documents:
+#             results.append({
+#                 "score": doc['relevance_score'],    
+#                 "text": doc['content'][:200],        
+#                 "metadata": doc.get('metadata', {})  
+#             })
+        
+#           return results
 
+#         except Exception as e:
+#           logger.error(f"Error in query_rag: {e}")
+#           return []       
 
 # ===========================================================================
 # SINGLETON RAG SYSTEM INSTANCE
