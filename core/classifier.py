@@ -352,10 +352,23 @@ Multi-Intent Not Detected:
 # ═════════════════════════════════════════════════════════════════════
 # IMPORTS
 # ═════════════════════════════════════════════════════════════════════
+import os
+import json
+import logging
+from typing import List, Dict, Tuple, Optional
+from dateclasses import dateclass
+
+import numpy as np
+from sklearn.feature_extraction.text import TfidVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline
+import jobLib
+
+logging.basicConfig(level=logging.INFO)
+logger= logging.getLogger(__name__)
 
 
-
-
+INTENTS = ["db_contact", "db_location", "rag", "ai_fallback"]
 
 
 

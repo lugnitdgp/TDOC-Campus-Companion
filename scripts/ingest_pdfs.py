@@ -297,14 +297,144 @@ class PDFIngestionPipeline:
         except Exception as e:
             logger.error(f"failed to initialize the chromadb : {e}")
             return RuntimeError(f"chromadb initialization failed:{e}")
+        
+        def run(self):
+            logger.info("="*60)
+            logger.info("Starting PDF Ingestion Pipeline")
+            logger.info("="*60)
+
+            logger.info("\n[1/4] Extracting text from PFDS ...")
+            pdf_results = self.pdf_processor.process_directory(self.pdf_dir)
+
+            if not pdf_results: 
+                logger.error("No PDFs processed. Exiting.")
+                return
+            
+            logger.info(f"Processed {len(pdf_results)} PDFs")
+
+            logger.info("\n[2/4] Chunking text ...")
+            all_chunks=[]
+            for pdf_data in pdf_results:
+                metadata = {
+                    'filename': pdf_data['filename'],
+                    'pages': pdf_data['pages'],
+                    'method':pdf_data['method']
+                }
+                chunks = self.chunker.chunk_text(pdf_data['text'],metadata)
+                all_chunks.extend(chunks)
+            logger.info("Created {len(all_chunks)} chunks")
+
+            logger.info("\n[3/4] Preparing documents for embedding...")
+            documents=[]
+            metadata=[]
+            ids=[]
+
+            for i,chunk in enumerate(all_chunks):
+                documents.append(chunk['text'])
+                metadata.append(chunk['metadata'])
+                ids.append(f"chunk_{i}")
+
+            logger.info(f"Prepared {len(documents)} documents")
+
+            logger.info("\n[4/4] Storing in vector database")
+
+            try:
+                existing_ids = self.collection.get()['ids']
+                if existing_ids:
+                    self.collection.delete(ids=existing_ids)
+            except:
+                pass
+            
+            batch_size=1000
+            for i in range(0,len(documents), batch_size):
+                batch_docs = documents[i:i+batch_size]
+                batch_meta= metadata[i:i+batch_size]
+                batch_ids= ids[i:i+batch_size]
+
+                self.collection.add(
+                    document=batch_docs,
+                    metadata=batch_meta,
+                    ids=batch_ids
+                )
+                logger.info(f"Added batch {i//batch_size+1} ({len(batch_docs)})")
+
+            logger.info(f"Stored {len(documents)} documents with embeddings in ChromaDB")
+
+
+            logger.info("\n"+"="*60)
+            logger.info("ingestion complete")
+            logger.info("="*60)
+            logger.info(f"PDFS processed: {len(pdf_results)}")
+            logger.info(f"Chunks created: {len(all_chunks)}")
+            logger.info(f"Documents stored: {len(documents)}")
+            logger.info(f"Collection: {len(self.collection_name)}")
+            logger.info(f"Database: {self.db_path}")
+
+            self._test_retrieval()
+
+
+    def _test_retrieval():
+        logger.info("\n [TEST] Running sample query")
+
+        results= self.colelction.query(
+            query_texts= ["CGPA calculation"],
+            n_results=3
+        )
+
+        if results['documents']:
+            logger.info("Retrieval working! Sample results:")
+            for i,doc in enumerate(results['documents'][0][:2],1):
+                logger.info(f" {i}. {doc[:100]}...")
+
+
+
+
+
+      
+
+
+
             
 # ══════════════════════════════════════════════════════════════════════
 # MAIN EXECUTION
 # ══════════════════════════════════════════════════════════════════════
 
+def main():
+    try:
+        PDF_DIR="data/pdfs"
+        DB_PATH= "data/rag_docs"
+
+
+        Path(PDF_DIR).mkdir(parents=True, exist_ok=True)
+        Path(DB_PATH).mkdir(parents=True, exist_ok=True)
+
+        pdf_files=list(Path(PDF_DIR).glob("*.pdf"))
+        if not pdf_files:
+            logger.error(f"No PDF files found in {PDF_DIR}")
+            logger.info(f"Please add PDF Files to {PDF_DIR}/ directory")
+            logger.info(f"Example: cp your document.pdf {PDF_DIR}/")
+            raise FileNotFoundError(f"No PDFs found in {PDF_DIR}")
+        
+        logger.info(f"Found {len(pdf_files)} PDF file(s)")
+
+        pipeline=PDFIngestionPipeline(
+            pdf_dir=PDF_DIR,
+            db_path=DB_PATH,
+            chunk_size=512,
+            chunk_overlap=50
+        )
+        
 
 
 
 # ===========================================================================
 # RUN SCRIPT
 # ===========================================================================
+        pipeline.run()
+
+    except Exception as e:
+        logger.error(f"pipeline failed: {e}")
+        raise
+    
+if __name__ == "__main__":
+    main()

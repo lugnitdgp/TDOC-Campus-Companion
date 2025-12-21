@@ -266,6 +266,13 @@ Slow Queries:
 # IMPORTS
 # ═════════════════════════════════════════════════════════════════════
 
+import logging
+from pathlib import Path
+from typing import List,Dict,Optional, Any
+import chromadb
+from chromadb.config import Settings
+from chromadb.utils import embedding_functions
+
 
 
 
@@ -274,12 +281,122 @@ Slow Queries:
 # LOGGING CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════
 
-
+logging.basicConfig(level=logging.INFO)
+logger=logging.getLogger(__name__)
 
 
 # ══════════════════════════════════════════════════════════════════════
 # RAG SYSTEM CLASS
 # ══════════════════════════════════════════════════════════════════════
+class RAGSystem:
+    def __init__(
+            self,
+            db_path: str= "data/rag_docs",
+            collection_name: str ="campus_docs"
+    ):
+        
+      self.db_path=Path(db_path)
+      self.collection_name=collection_name
+
+      try:
+         
+        self.client=chromadb.PersistentClient(
+           path=str(self.db_path),
+           settings=Settings(anonymized_telemetry=False)
+        )
+
+        self.embedding_function=embedding_functions.SentenceTransformerEmbeddingFunction(
+           model_name="all-MiniLM-L6-v2"
+        )
+
+        self.collection=self.client.get_or_create_collection(
+           name=self.collection_name,
+           embedding_fucntion=self.embedding_function,
+           metadata={"description":"Campus documents for RAG"}
+        )
+
+        logger.info(f"RAG System initialised: {self.collection.count()} documents")
+
+      except Exception as e:
+         logger.error(f"failed to initialised RAG System: {e}")
+         raise RuntimeError(f"ChromaDB initialization failed: {e}")
+      
+    def search_documents(
+          self,
+          query: str,
+          top_k: int= 3,
+          min_score: float=0.3
+    ) ->List[Dict[str,Any]]:
+       
+       try:
+          
+          results=self.collection.query(
+             query_texts=[query],
+             n_results=top_k
+          )
+
+          documents=[]
+          if results and results['documents'] and results['documents'][0]:
+             for i,doc_text in enumerate(results['documents'][0]):
+                distance=results['documents'][0][i] if results['distances'] else 0
+                similarity = 1-distance
+
+                if similarity>=min_score:
+                   documents.append({
+                      'content':doc_text,
+                      'relevance_score':similarity,
+                      'metadata':results['metadatas'][0][i] if results['metadata'] else{}
+                   })
+          return documents
+       
+       except Exception as e:
+          logger.error(f"Error searching documents: {e}")
+          return []
+       
+    def get_collection_stats(self)-> Dict[str,Any]:
+       
+        try:
+          return{
+             'count': self.collection.count(),
+             'name': self.collection_name,
+             'path':str(self.db_path)
+          }
+        except Exception as e:
+          logger.error(f"Error getting collection stats: {e}")
+          return {'count': 0, 'error': str(e)}
+        
+
+def query_rag(query:str, top_k:int=3)-> List[Dict[str,Any]]:
+   try:
+      rag_system=RAGSystem()
+      documents=rag_system.search_documents(query,top_k=top_k)
+
+      results=[]
+      for doc in documents:
+         results.append({
+            "score": doc['relevance_score'],
+            "text":doc['content'][:200],
+            "metadata":doc.get('metadata',{})
+         })
+
+         return results
+      
+   except Exception as e:
+      logger.error(f"Error in query_rag: {e}")
+      return []
+   
+
+
+_rag_system_instance=None
+
+def get_rag_system()->RAGSystem:
+   
+   global _rag_system_instance
+   if _rag_system_instance is None:
+      _rag_system_instance= RAGSystem()
+   return _rag_system_instance
+
+
 
 
 
