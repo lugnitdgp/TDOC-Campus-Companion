@@ -298,85 +298,85 @@ class PDFIngestionPipeline:
             logger.error(f"failed to initialize the chromadb : {e}")
             return RuntimeError(f"chromadb initialization failed:{e}")
         
-        def run(self):
-            logger.info("="*60)
-            logger.info("Starting PDF Ingestion Pipeline")
-            logger.info("="*60)
+    def run(self):
+        logger.info("="*60)
+        logger.info("Starting PDF Ingestion Pipeline")
+        logger.info("="*60)
 
-            logger.info("\n[1/4] Extracting text from PFDS ...")
-            pdf_results = self.pdf_processor.process_directory(self.pdf_dir)
+        logger.info("\n[1/4] Extracting text from PFDS ...")
+        pdf_results = self.pdf_processor.process_directory(self.pdf_dir)
 
-            if not pdf_results: 
-                logger.error("No PDFs processed. Exiting.")
-                return
-            
-            logger.info(f"Processed {len(pdf_results)} PDFs")
+        if not pdf_results: 
+            logger.error("No PDFs processed. Exiting.")
+            return
+        
+        logger.info(f"Processed {len(pdf_results)} PDFs")
 
-            logger.info("\n[2/4] Chunking text ...")
-            all_chunks=[]
-            for pdf_data in pdf_results:
-                metadata = {
-                    'filename': pdf_data['filename'],
-                    'pages': pdf_data['pages'],
-                    'method':pdf_data['method']
-                }
-                chunks = self.chunker.chunk_text(pdf_data['text'],metadata)
-                all_chunks.extend(chunks)
-            logger.info("Created {len(all_chunks)} chunks")
+        logger.info("\n[2/4] Chunking text ...")
+        all_chunks=[]
+        for pdf_data in pdf_results:
+            metadata = {
+                'filename': pdf_data['filename'],
+                'pages': pdf_data['pages'],
+                'method':pdf_data['method']
+            }
+            chunks = self.chunker.chunk_text(pdf_data['text'],metadata)
+            all_chunks.extend(chunks)
+        logger.info("Created {len(all_chunks)} chunks")
 
-            logger.info("\n[3/4] Preparing documents for embedding...")
-            documents=[]
-            metadata=[]
-            ids=[]
+        logger.info("\n[3/4] Preparing documents for embedding...")
+        documents=[]
+        metadata=[]
+        ids=[]
 
-            for i,chunk in enumerate(all_chunks):
-                documents.append(chunk['text'])
-                metadata.append(chunk['metadata'])
-                ids.append(f"chunk_{i}")
+        for i,chunk in enumerate(all_chunks):
+            documents.append(chunk['text'])
+            metadata.append(chunk['metadata'])
+            ids.append(f"chunk_{i}")
 
-            logger.info(f"Prepared {len(documents)} documents")
+        logger.info(f"Prepared {len(documents)} documents")
 
-            logger.info("\n[4/4] Storing in vector database")
+        logger.info("\n[4/4] Storing in vector database")
 
-            try:
-                existing_ids = self.collection.get()['ids']
-                if existing_ids:
-                    self.collection.delete(ids=existing_ids)
-            except:
-                pass
-            
-            batch_size=1000
-            for i in range(0,len(documents), batch_size):
-                batch_docs = documents[i:i+batch_size]
-                batch_meta= metadata[i:i+batch_size]
-                batch_ids= ids[i:i+batch_size]
+        try:
+            existing_ids = self.collection.get()['ids']
+            if existing_ids:
+                self.collection.delete(ids=existing_ids)
+        except:
+            pass
+        
+        batch_size=1000
+        for i in range(0,len(documents), batch_size):
+            batch_docs = documents[i:i+batch_size]
+            batch_meta= metadata[i:i+batch_size]
+            batch_ids= ids[i:i+batch_size]
 
-                self.collection.add(
-                    document=batch_docs,
-                    metadata=batch_meta,
-                    ids=batch_ids
-                )
-                logger.info(f"Added batch {i//batch_size+1} ({len(batch_docs)})")
+            self.collection.add(
+                documents=batch_docs,
+                metadatas=batch_meta,
+                ids=batch_ids
+            )
+            logger.info(f"Added batch {i//batch_size+1} ({len(batch_docs)})")
 
-            logger.info(f"Stored {len(documents)} documents with embeddings in ChromaDB")
-
-
-            logger.info("\n"+"="*60)
-            logger.info("ingestion complete")
-            logger.info("="*60)
-            logger.info(f"PDFS processed: {len(pdf_results)}")
-            logger.info(f"Chunks created: {len(all_chunks)}")
-            logger.info(f"Documents stored: {len(documents)}")
-            logger.info(f"Collection: {len(self.collection_name)}")
-            logger.info(f"Database: {self.db_path}")
-
-            self._test_retrieval()
+        logger.info(f"Stored {len(documents)} documents with embeddings in ChromaDB")
 
 
-    def _test_retrieval():
+        logger.info("\n"+"="*60)
+        logger.info("ingestion complete")
+        logger.info("="*60)
+        logger.info(f"PDFS processed: {len(pdf_results)}")
+        logger.info(f"Chunks created: {len(all_chunks)}")
+        logger.info(f"Documents stored: {len(documents)}")
+        logger.info(f"Collection: {len(self.collection_name)}")
+        logger.info(f"Database: {self.db_path}")
+
+        self._test_retrieval()
+
+
+    def _test_retrieval(self):
         logger.info("\n [TEST] Running sample query")
 
-        results= self.colelction.query(
+        results= self.collection.query(
             query_texts= ["CGPA calculation"],
             n_results=3
         )

@@ -252,7 +252,7 @@ class PDFProcessor:
             
             try:
                 result = self.extract_text_from_pdf(pdf_file)
-                result.append(result)
+                results.append(result)
             
             except Exception as e:
                 logger.error(f"failed to process {pdf_file.name}:{e}")

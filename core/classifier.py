@@ -349,6 +349,9 @@ Multi-Intent Not Detected:
   → Add multi-intent training examples
 """
 
+
+
+
 # ═════════════════════════════════════════════════════════════════════
 # IMPORTS
 # ═════════════════════════════════════════════════════════════════════
@@ -356,13 +359,13 @@ import os
 import json
 import logging
 from typing import List, Dict, Tuple, Optional
-from dateclasses import dateclass
+from dataclasses import dataclass
 
 import numpy as np
 from sklearn.feature_extraction.text import TfidVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
-import jobLib
+import joblib
 
 logging.basicConfig(level=logging.INFO)
 logger= logging.getLogger(__name__)
@@ -370,11 +373,6 @@ logger= logging.getLogger(__name__)
 
 INTENTS = ["db_contact", "db_location", "rag", "ai_fallback"]
 
-
-
-# ══════════════════════════════════════════════════════════════════════
-# LOADING ENVIRONMENT VARIABLES
-# ══════════════════════════════════════════════════════════════════════
 
 
 
@@ -407,7 +405,17 @@ INTENTS = ["db_contact", "db_location", "rag", "ai_fallback"]
 # AI FALLBACK SYSTEM (NEW)
 # ============================================================================
 
+# def fallback_ai_response(query:str) ->str:
 
+
+
+#    return (
+#         "I'm **Campus Companion**, designed to assist specifically with campus-related information such as:\n\n"
+#         "Contact details (faculty, canteen, hostel, administration)\n\n"
+#         "Building, room, and facility locations\n\n"
+#         "Academic rules, CGPA policies, and hostel guidelines\n\n"
+#         "For the best help, please ask something related to your campus. I'll be happy to assist!"
+#     )
 
 
 
@@ -417,7 +425,27 @@ INTENTS = ["db_contact", "db_location", "rag", "ai_fallback"]
 # LEVEL 1: KEYWORD-BASED CLASSIFIER
 # ============================================================================
 
+# rag_academic_terms = [
+#     'cgpa', 'gpa', 'grade', 'grading', 'semester', 'credit', 'credits',
+#     'marks', 'exam', 'examination', 'test', 'attendance', 'backlog',
+#     'course', 'courses', 'subject', 'subjects', 'syllabus'
+# ]
 
+# rag_policy_keywords = [
+#     'rule', 'rules', 'policy', 'policies', 'regulation', 'regulations',
+#     'procedure', 'guideline', 'requirement', 'criteria', 'eligibility'
+# ]
+
+# rag_question_patterns = [
+#     'how to', 'how do i', 'how can i', 'how does',
+#     'what is', 'what are', 'explain', 'define', 'describe',
+#     'tell me about', 'steps to', 'process for'
+# ]
+
+# rag_campus_terms = [
+#     'hostel', 'mess', 'accommodation', 'fee', 'fees',
+#     'scholarship', 'library', 'lab', 'facility', 'academic'
+# ]
 
 
 
@@ -441,23 +469,48 @@ INTENTS = ["db_contact", "db_location", "rag", "ai_fallback"]
 
 
 
-# ============================================================================
-# LEVEL 3: LARGE LANGUAGE MODEL CLASSIFIER
-# ============================================================================
-
-
-
-
-
 
 
 
 
 
 # ============================================================================
-# UNIFIED CLASSIFIER: Combines All Three Levels + Fallback
+# UNIFIED CLASSIFIER: Combines All Levels + Fallback
 # ============================================================================
 
+# training_data = [
+#     # RAG queries
+#     ("How to calculate CGPA", "rag"),
+#     ("What are the CGPA rules", "rag"),
+#     ("Explain semester grade system", "rag"),
+#     ("Academic policy for attendance", "rag"),
+#     ("Hostel rules and regulations", "rag"),
+#     ("CGPA calculation method", "rag"),
+#     ("What is the passing criteria", "rag"),
+#     ("Fee payment procedure", "rag"),
+    
+#     # Contact queries
+#     ("Roy canteen phone number", "db_contact"),
+#     ("Contact details of mess", "db_contact"),
+#     ("How to contact canteen", "db_contact"),
+#     ("Email of academic office", "db_contact"),
+    
+#     # Location queries
+#     ("Where is room AB101", "db_location"),
+#     ("Find library location", "db_location"),
+#     ("Room 204 location", "db_location"),
+#     ("Where is Roy canteen located", "db_location"),
+    
+#     # AI Fallback (greetings + general questions)
+#     ("Hi there", "ai_fallback"),
+#     ("Hello", "ai_fallback"),
+#     ("Good morning", "ai_fallback"),
+#     ("Thanks", "ai_fallback"),
+#     ("What's the weather today", "ai_fallback"),
+#     ("Tell me a joke", "ai_fallback"),
+#     ("Who are you", "ai_fallback"),
+#     ("What can you do", "ai_fallback"),
+# ]
 
 
 
