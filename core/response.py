@@ -297,18 +297,32 @@ Methods:
 # =======================================================================
 # IMPORTS
 # =======================================================================
+import logging 
+import os
+from typing import Dict,List
+from dotenv import load_Dotenv
 
+from langchain_core.messages import HumanMessage, SystemMessage
 
+from core.rag import get_rag_system
+from core.classifier import classify_detailed
 
+try:
+  from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
+  HAVE_HF_LLM = True 
+except ImportError:
+  HAVE_HF_LLM = False 
+  printf("Warining: langchain-huggingface not installed")
 
+  
+from db.session import SessionLocal
+from db import models
 
+load_dotenv()
 
+logging.basicConfig(level = logging.INFO)
+logger = logging.getLogger(__name__)
 
-
-
-# =======================================================================
-# LOGGING SETUP
-# =======================================================================
 
 
 
@@ -317,10 +331,231 @@ Methods:
 # =======================================================================
 # RESPONSE GENERATOR CLASS
 # =======================================================================
+class ResponseGenerator:
 
+  def __init__(self):
+    self.rag = get_rag_system()
+    self.llm = None
 
+    if HAVE_HF_LLM:
+      try:
+        hf_token = os.getenv("HUGGINGFACEHUB_ACCESS_TOKEN")
 
-# ----------------------------------------------------------------------
+        hf_llm = HuggingFaceEndpoint(
+          repo_id = "mistralai/Mistral-7B-Instruct-v0.2",
+          max_new_tokens = 512,
+          temperature = 0.3,
+          huggingfacehub_api_token = hf_token,
+          timeout = 120
+        )
+
+        self.llm = ChatHuggingFace(llm = hf_llm)
+        logger.info("HuggingFace Mistral-7B initialized")
+      except Exception as e:
+        logger.warning(f"HF init failed: {e}")
+
+    if not self.llm:
+      logger.warning("No LLM available.")
+
+#Query Refinement
+
+  def refine_query(self,query:str) -> str:
+    query = query.strip()
+    if len(query.spilt()) <=3 or not self.llm:
+      return query
+
+    try:
+      messages = [
+        SystemMessage(content="Refine queries for semantic search."),
+        HumanMessage(content =f"Refine this query:\n{query}")
+      ]
+      response = self.llm.invoke(messages)
+      return response.content.strip().split("\n")[0]
+    except Exception:
+      return query
+
+# Response Formatting
+  def format_response(self,query:str,data:str) ->str:
+    if not self.llm:
+      return f"Here what I found:\n\n{data}"
+
+    try:
+      messages = [
+        SystemMessage(content = "Format clearly and concisely."),
+        HumanMessage(content=f"Question: {query}\n\nData:\n{data}")
+      ]
+      return self.llm.invoke(messages).content.strip()
+
+    except Exception:
+      return f"Here's what I found:\n\n{data}"
+
+  #rag
+  def generate_rag_response(
+    self,
+    query: str,
+    max_context_length: int = 2000,
+    top_k: int = 5
+  ) -> Dict[str, any]:
+    refined_query = self.refine_query(query)
+    documents = self.rag.search_documents(refined_query,top_k = top_k)
+    if not documents:
+      return {
+        "answer":"No relevant information found.",
+        "source": [],
+        "confidence":0.0,
+        "method":"rag_no_results"
+      }
+    
+    context = self._build_context(documents,max_context_length)
+
+    if self.llm:
+      answer = self._generate_llm_answer(query,context)
+      method = "rag_hf_llm"
+    else:
+      answer = self._format_context_answer(documents)
+      method = "rag_basic"
+
+    return {
+      "answer" : answer,
+      "sources" : self._format_sources(documents),
+      "confidence" : self._calculate_confidence(documents),
+      "method" : method
+    }
+
+  def _build_context(self,documents: List[Dict], max_length: int) ->str:
+    context = ""
+    for i, doc in enumerate(documents, 1):
+      block = f"[Source {i}]\n{doc['content']}\n\n"
+      if len(context) + len(block) > max_length:
+        break
+      context += block
+    return context
+
+  def _generate_llm_answer(self,query:str,context:str) ->str:
+    try:
+      prompt: f"""Answer the question using ONLY the context below.
+      Context : 
+      {context}
+      Question: {query}
+      Answer:
+      """
+        messages = [
+          SystemMessage(context = "Answer only from the context"),
+          HumanMessage(content = prompt)
+        ]
+        return self.llm.invoke(messages).context.strip()
+    except Exception:
+      return self._format_context_answer([{"content" : context}])
+
+  def _format_context_answer(self,documents:List[Dict]) ->str:
+    parts = ["Based on available information"]
+    for doc in documents[:3]:
+      parts.append(doc["content"][:300] + "....")
+    if len(documents) > 3:
+      parts.append(f"...and {len(documents)-3} more sources")
+    return "\n\n".join(parts)
+
+  def _calculate_confidence(self,documents:List[Dict]) -> float:
+    scores = [doc.get("revelant_score",0.5) for doc in documents[:3]]
+    return round(sum(scores)/len(scores),2)
+
+  def _format_sources(self,documents:List[Dict]) -> List[Dict]:
+    return[
+      {
+        "filename" : doc["metadata"].get("filename","Unknown"),
+        "relevance" : round(doc.get("relevance_score",0.0),2)
+      }
+    ]
+
+  def generate_response(self,query:str, intent:str = None) -> Dict[str,any]:
+    if not intent:
+      intent = classify_detailed(query).primary_intent
+
+    if intent == "rag":
+      return self.generate_rag_response(query)
+    if intent == "db_contact":
+      return self._generate_contact_response(query)
+    if intent == "db_location":
+      return self._generate_location_response(query)
+
+    return self._generate_ai_fallback_response(query)
+
+  def _generate_contact_response(self, query:str) -> Dict[str,any]:
+    session = SessionLocal()
+    try:
+      from sqlmodel import select 
+      canteens = session.excecute(select(models.Canteen)).all()
+
+      if not canteens:
+        return {"answer":"No contact information found.","sources":[],"confidence":0.0}
+      
+      c = canteens[0][0]
+      answer = f"{c.name}\n"
+      answer += f"Phone: {c.phone}\n"
+      if c.email:
+        answer += f"Email : {c.email}"
+
+      return {
+        "answer" : answer,
+        "sources" : [{"table":"cateen"}],
+        "confidence" : 0.95
+      }
+    except Exception as e:
+      logger.error(f"Content query error: {e}")
+      return {"answer" : str(e),"source":[],"confidence":0.0}
+    finally:
+      session.close()
+
+  def _generate_location_response(self,query:str) ->Dict[str,any]:
+    session = SessionLocal()
+    try:
+      from sqlmodel import select
+      rooms = session.execute(select(models.Room)).all()
+      if not rooms:
+        return {"answer":"No location info found.","source":[],"confidence":0.0}
+
+      room = rooms[0][0]
+      answer = f"Room {room.room_no}\n"
+      if room.building:
+        answer += f"Building: {room.building}\n"
+      if room.floor:
+        answer += f"Floor : {room.floor}"
+
+      return {
+        "answer":answer,
+        "sources":[{"table" : "room"}],
+        "confindence" : 0.95
+      }
+    except Exception as e:
+      logger.eroor(f"Location query error: {e}")
+      return {"answer":str(e), "source" :[],"confidence":0,0}
+    finally:
+      session.close()
+
+  def _generate_ai_fallback_response(self,query:str) ->Dict[str, any]:
+    return{
+      "answer":"I can help with academics, contacts and campus location",
+      "sources":[],
+      "confidence" : 0.6
+    }
+
+# --------------------------------------------------------------------
 # GLOBAL HELPERS
 # ----------------------------------------------------------------------
 
+_response_generator = None
+
+def get_repsonse_generator() -> ResponseGenerator:
+  global _response_generator 
+  if _response_generator is None:
+    _response_generator = ResponseGenerator()
+  return _response_generator
+
+def generate_response (query:str, intent:str=None) -> Dict [str,any]:
+  return get_repsonse_generator().generate_response(query,intent)
+
+def generate_rag_response (query:str) -> Dict[str, any]:
+  return get_repsonse_generator().generate_rag_response(query)
+
+def format_response (query:str, data:str) ->str:
+  return get_repsonse_generator().format_response(query,data)
