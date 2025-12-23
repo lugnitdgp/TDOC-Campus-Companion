@@ -367,14 +367,6 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 import joblib
 
-logging.basicConfig(level=logging.INFO)
-logger= logging.getLogger(__name__)
-
-
-INTENTS = ["db_contact", "db_location", "rag", "ai_fallback"]
-
-
-
 
 
 
@@ -383,11 +375,24 @@ INTENTS = ["db_contact", "db_location", "rag", "ai_fallback"]
 # ═══════════════════════════════════════════════════════════════════════
 
 
+logging.basicConfig(level=logging.INFO)
+logger= logging.getLogger(__name__)
+
+
+
 
 
 # ============================================================================
 # INTENT TYPES
 # ============================================================================
+
+INTENTS = ["db_contact", "db_location", "rag", "ai_fallback"]
+
+
+
+
+
+
 
 
 
@@ -396,8 +401,21 @@ INTENTS = ["db_contact", "db_location", "rag", "ai_fallback"]
 # DATA STRUCTURES: Building Blocks for Classification Results
 # ============================================================================
 
+@dataclass
+class IntentResult:
+    
+    intent : str
+    confidence : float
+    method :str
 
-
+@dataclass
+class ClassificationResult:
+    
+    primary_intent: str
+    all_intents : List[IntentResult]
+    confidence : float
+    is_multi_intent : bool
+    needs_fallback : bool = False
 
 
 
@@ -405,17 +423,17 @@ INTENTS = ["db_contact", "db_location", "rag", "ai_fallback"]
 # AI FALLBACK SYSTEM (NEW)
 # ============================================================================
 
-# def fallback_ai_response(query:str) ->str:
+def fallback_ai_response(query:str) ->str:
 
 
 
-#    return (
-#         "I'm **Campus Companion**, designed to assist specifically with campus-related information such as:\n\n"
-#         "Contact details (faculty, canteen, hostel, administration)\n\n"
-#         "Building, room, and facility locations\n\n"
-#         "Academic rules, CGPA policies, and hostel guidelines\n\n"
-#         "For the best help, please ask something related to your campus. I'll be happy to assist!"
-#     )
+   return (
+        "I'm **Campus Companion**, designed to assist specifically with campus-related information such as:\n\n"
+        "Contact details (faculty, canteen, hostel, administration)\n\n"
+        "Building, room, and facility locations\n\n"
+        "Academic rules, CGPA policies, and hostel guidelines\n\n"
+        "For the best help, please ask something related to your campus. I'll be happy to assist!"
+    )
 
 
 
@@ -425,41 +443,130 @@ INTENTS = ["db_contact", "db_location", "rag", "ai_fallback"]
 # LEVEL 1: KEYWORD-BASED CLASSIFIER
 # ============================================================================
 
-# rag_academic_terms = [
-#     'cgpa', 'gpa', 'grade', 'grading', 'semester', 'credit', 'credits',
-#     'marks', 'exam', 'examination', 'test', 'attendance', 'backlog',
-#     'course', 'courses', 'subject', 'subjects', 'syllabus'
-# ]
-
-# rag_policy_keywords = [
-#     'rule', 'rules', 'policy', 'policies', 'regulation', 'regulations',
-#     'procedure', 'guideline', 'requirement', 'criteria', 'eligibility'
-# ]
-
-# rag_question_patterns = [
-#     'how to', 'how do i', 'how can i', 'how does',
-#     'what is', 'what are', 'explain', 'define', 'describe',
-#     'tell me about', 'steps to', 'process for'
-# ]
-
-# rag_campus_terms = [
-#     'hostel', 'mess', 'accommodation', 'fee', 'fees',
-#     'scholarship', 'library', 'lab', 'facility', 'academic'
-# ]
 
 
+def classify_keywords(text:str)->IntentResult:
+    
+    text_lower = text.lower()
+
+    rag_academic_terms = [
+    'cgpa', 'gpa', 'grade', 'grading', 'semester', 'credit', 'credits',
+    'marks', 'exam', 'examination', 'test', 'attendance', 'backlog',
+    'course', 'courses', 'subject', 'subjects', 'syllabus'
+  ]
+
+    rag_policy_keywords = [
+        'rule', 'rules', 'policy', 'policies', 'regulation', 'regulations',
+        'procedure', 'guideline', 'requirement', 'criteria', 'eligibility'
+    ]
+
+    rag_question_patterns = [
+        'how to', 'how do i', 'how can i', 'how does',
+        'what is', 'what are', 'explain', 'define', 'describe',
+        'tell me about', 'steps to', 'process for'
+    ]
+
+    rag_campus_terms = [
+        'hostel', 'mess', 'accommodation', 'fee', 'fees',
+        'scholarship', 'library', 'lab', 'facility', 'academic'
+    ]
+
+    rag_score = 0
+
+    if any(term in text_lower for term in rag_academic_terms):
+        rag_score += 0.4
+    if any(keyword in text_lower for keyword in rag_policy_keywords):
+        rag_score += 0.3
+    if any(pattern in text_lower for pattern in rag_question_patterns):
+        rag_score += 0.2
+    if any(term in text_lower for term in rag_campus_terms):
+        rag_score += 0.2
+
+    if rag_score>0.4:
+        confidence = min(0.95,rag_score)
+        return IntentResult('rag',confidence,'keyword')
+
+    contact_words = ['phone','number','contact','email','call','reach']
+    contact_entities = ['canteen','mess','office','department','cafeteria']
+
+    has_contact_word = any(word in text_lower for word in contact_words)
+    has_contact_entities = any(entity in text_lower for entity in contact_entities)
+
+    if has_contact_word or has_contact_entities:
+        confidence = 0.90 if (has_contact_word and has_contact_entities) else 0.80
+        return IntentResult('db_contact',confidence,'keyword')
 
 
+    location_words = ['where','location','room','building','find','map','floor','directions']
 
-
-
+    if any(word in text_lower for word in location_words):
+        return IntentResult('db_location',0.85,'keyword')
+    
+    return IntentResult('ai_fallback',0.6,'keyword')
 
 # ============================================================================
 # LEVEL 2: MACHINE LEARNING CLASSIFIER
 # ============================================================================
 
+class MLClassifier :
+    
+    def __init__(self):
+        self.model: Optional[Pipeline] = None
+        self.is_trained = False
 
+    def train(self, X:List[str],y:List[str]):
+        
+        self.model = Pipeline([
+            ('tfidf',TfidVectorizer(
+                ngram_range=(1,2),
+                max_features = 5000
+            )),
 
+            ('clf',LogisticRegression(max_iter=500))
+
+        ])
+
+        self.model.fit(X,y)
+        self.is_trained = True
+
+        logger.infp (f"ML classifier trained on {len(X)} samples")
+
+    def predict(self,text:str)->IntentResult:
+      if not self.is_trained:
+          return IntentResult('ai_fallback',0.3,'ml_untrained')
+      
+      probs = self.model.predict_proba([text])[0]
+      intent_idx = np.argmax(probs)
+      intent = self.model.classes_[intent_idx]
+      confidence = float(probs[intent_idx])
+
+      return IntentResult(intent,confidence,'ml')
+    
+    def predict_multi(self,text:str,threshold:float =0.2) -> List[IntentResult]:
+        if not self.is_trained:
+          return []
+        
+        probs = self.model.predict_proba([text])[0]
+        results = []
+
+        for idx, prob in enumerate(probs):
+            if prob >= threshold:
+                intent = self.model.classes_[idx]
+                results.append(IntentResult(intent,float(prob),'ml'))
+        
+        return sorted(results, key= lambda x:x.confidence, reverse=True)
+
+    def save(self, path:str):
+        
+        joblib.dump(self.model,path)
+        logger.info(f'Model saved to {path}')
+
+    def load(self,path:str):
+        
+        self.model =joblib.load(path)
+        self.is_trained = True
+
+        logger.info(f'Model loaded from {path}')
 
 
 
@@ -478,54 +585,129 @@ INTENTS = ["db_contact", "db_location", "rag", "ai_fallback"]
 # UNIFIED CLASSIFIER: Combines All Levels + Fallback
 # ============================================================================
 
-# training_data = [
-#     # RAG queries
-#     ("How to calculate CGPA", "rag"),
-#     ("What are the CGPA rules", "rag"),
-#     ("Explain semester grade system", "rag"),
-#     ("Academic policy for attendance", "rag"),
-#     ("Hostel rules and regulations", "rag"),
-#     ("CGPA calculation method", "rag"),
-#     ("What is the passing criteria", "rag"),
-#     ("Fee payment procedure", "rag"),
+
+
+class UnifiedClassifier :
     
-#     # Contact queries
-#     ("Roy canteen phone number", "db_contact"),
-#     ("Contact details of mess", "db_contact"),
-#     ("How to contact canteen", "db_contact"),
-#     ("Email of academic office", "db_contact"),
-    
-#     # Location queries
-#     ("Where is room AB101", "db_location"),
-#     ("Find library location", "db_location"),
-#     ("Room 204 location", "db_location"),
-#     ("Where is Roy canteen located", "db_location"),
-    
-#     # AI Fallback (greetings + general questions)
-#     ("Hi there", "ai_fallback"),
-#     ("Hello", "ai_fallback"),
-#     ("Good morning", "ai_fallback"),
-#     ("Thanks", "ai_fallback"),
-#     ("What's the weather today", "ai_fallback"),
-#     ("Tell me a joke", "ai_fallback"),
-#     ("Who are you", "ai_fallback"),
-#     ("What can you do", "ai_fallback"),
-# ]
+    def __init__(self):
+        self.ml_classifer = MLClassifier()
+        self._train_default_model()
+
+    def _train_default_model(self):
+        
+      training_data = [
+        # RAG queries
+        ("How to calculate CGPA", "rag"),
+        ("What are the CGPA rules", "rag"),
+        ("Explain semester grade system", "rag"),
+        ("Academic policy for attendance", "rag"),
+        ("Hostel rules and regulations", "rag"),
+        ("CGPA calculation method", "rag"),
+        ("What is the passing criteria", "rag"),
+        ("Fee payment procedure", "rag"),
+        
+        # Contact queries
+        ("Roy canteen phone number", "db_contact"),
+        ("Contact details of mess", "db_contact"),
+        ("How to contact canteen", "db_contact"),
+        ("Email of academic office", "db_contact"),
+        
+        # Location queries
+        ("Where is room AB101", "db_location"),
+        ("Find library location", "db_location"),
+        ("Room 204 location", "db_location"),
+        ("Where is Roy canteen located", "db_location"),
+        
+        # AI Fallback (greetings + general questions)
+        ("Hi there", "ai_fallback"),
+        ("Hello", "ai_fallback"),
+        ("Good morning", "ai_fallback"),
+        ("Thanks", "ai_fallback"),
+        ("What's the weather today", "ai_fallback"),
+        ("Tell me a joke", "ai_fallback"),
+        ("Who are you", "ai_fallback"),
+        ("What can you do", "ai_fallback"),
+      ]
+
+      X = [example[0] for example in training_data]
+      y = [example[1] for example in training_data]
+
+      self.ml_classifer.train(X,y)
+
+    def classify(self,text:str)->ClassificationResult:
+        
+        all_results = []
+
+        keyword_result = classify_keywords(text)
+        all_results.append(keyword_result)
 
 
+        if self.ml_classifer.is_trained:
+            ml_results = self.ml_classifer.predict_multi(text,threshold=0.2)
+            all_results.extend(ml_results)
+
+        intent_scores = {}
 
 
+        for result in all_results:
+            if result.intent not in intent_scores:
+                intent_scores[result.intent]= []
+            intent_scores[result.intent].append(result.confidence)
 
 
+        final_intents = []
 
+        for intent, scores in intent_scores.item():
+            weighted_score = max(scores)
+            best_result = max(
+                [r for r in all_results if r.intent==intent],
+                key=lambda x:x.confidence
+            )
+            method = best_result.method
 
+            final_intents.append(IntentResult(intent,weighted_score,reverse=True))
+        
+
+        final_intents.sort(key= lambda x: x.confidence, reverse=True)
+
+        high_conf_intents = [i for i in final_intents if i.confidence>0.25]
+        is_multi = len(high_conf_intents)>1
+
+        primary = final_intents[0].intent
+        needs_fallback = (primary=='ai_fallback') or (final_intents[0].confidence<0.6)
+
+        return ClassificationResult(
+            primary_intent=primary,
+            all_intents=final_intents,
+            confidence=final_intents[0].confidence,
+            is_multi_intent=is_multi,
+            needs_fallback=needs_fallback
+        )
 
 # ============================================================================
 # SIMPLE API (Enhanced)
 # ============================================================================
 
 
+_classifier_instance = None
 
+def get_classifier()-> UnifiedClassifier:
+    
+    global _classifier_instance
+
+    if(_classifier_instance is None):
+        _classifier_instance = UnifiedClassifier()
+    return _classifier_instance
+
+def classify(text:str)->str:
+    
+    classifier = get_classifier()
+    result = classifier.classify(text)
+    return result.primary_intent
+
+def classify_detailed(text:str)->ClassificationResult:
+    classifier = get_classifier()
+    return classifier.classify(text)
 
 
 
@@ -536,4 +718,36 @@ INTENTS = ["db_contact", "db_location", "rag", "ai_fallback"]
 # NEW: INTEGRATED RESPONSE FUNCTION
 # ============================================================================
 
-   
+def get_response_with_fallback(text:str,db_result:Optional[str]=None,rag_result:Optional[str]=None)->dict:
+    
+    classification = classify_detailed(text)
+
+    use_fallback = False
+
+    if classification.primary_intent == 'ai_fallback':
+        use_fallback = True
+
+    elif not db_result and not rag_result:
+        use_fallback = True
+
+    elif classification.confidence<0.6:
+        use_fallback =True
+    
+    if use_fallback:
+        answer = fallback_ai_response(text)
+        used_fallback = True
+    else :
+        answer = db_result or rag_result or "I couldn't find information on that."
+        used_fallback = False
+    
+    return {
+        "answer": answer,
+        "intent": classification.primary_intent,
+        "confidence": classification.confidence,
+        "used_fallback": used_fallback,
+        "is_multi_intent": classification.is_multi_intent,
+        "all_intents": [
+            {"name": i.intent, "confidence": i.confidence, "method": i.method}
+            for i in classification.all_intents[:3]
+        ]
+    }
