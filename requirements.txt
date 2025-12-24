@@ -110,6 +110,11 @@ packaging==25.0                  # Core packaging utilities
 annotated-doc==0.0.4             # Documentation annotations
 hf-xet==1.2.0                    # HuggingFace Xet integration
 
+# PDF Processing & OCR
+PyPDF2==3.0.1          # Reliable for text extraction
+pdf2image==1.16.3      # Converts PDF pages to images
+pytesseract==0.3.13    # Python wrapper for Tesseract OCR
+
 # ============================================================================
 # Installation Instructions:
 # ============================================================================

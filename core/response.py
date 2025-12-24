@@ -300,7 +300,7 @@ Methods:
 import logging 
 import os
 from typing import Dict,List
-from dotenv import load_Dotenv
+from dotenv import load_dotenv
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -439,11 +439,11 @@ class ResponseGenerator:
       Question: {query}
       Answer:
       """
-        messages = [
-          SystemMessage(context = "Answer only from the context"),
-          HumanMessage(content = prompt)
-        ]
-        return self.llm.invoke(messages).context.strip()
+      messages = [
+        SystemMessage(context = "Answer only from the context"),
+        HumanMessage(content = prompt)
+      ]
+      return self.llm.invoke(messages).context.strip()
     except Exception:
       return self._format_context_answer([{"content" : context}])
 
@@ -528,7 +528,7 @@ class ResponseGenerator:
       }
     except Exception as e:
       logger.eroor(f"Location query error: {e}")
-      return {"answer":str(e), "source" :[],"confidence":0,0}
+      return {"answer":str(e), "source" :[],"confidence":0.0}
     finally:
       session.close()
 

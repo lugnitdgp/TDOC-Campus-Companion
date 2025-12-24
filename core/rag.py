@@ -1,4 +1,3 @@
-# =============================== DAY - 2 ================================ #
 """
 ╔══════════════════════════════════════════════════════════════════════════╗
 ║          RAG (RETRIEVAL AUGMENTED GENERATION) SYSTEM                     ║
@@ -19,7 +18,7 @@ This file is the FINAL STEP in the teaching sequence - where RAG actually happen
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
 │  [INGESTION PHASE] - Done Once                                      │
-│  ═══════════════════════════════════════════════════════════════    │
+│  ═══════════════════════════════════════════════════════════════   │
 │   1. PDF files (data/pdfs/)                                         │
 │   2. Extract text (scripts/pdf_processor.py)                        │
 │   3. Chunk text (scripts/chunking.py)                               │
@@ -27,7 +26,7 @@ This file is the FINAL STEP in the teaching sequence - where RAG actually happen
 │   5. Store in ChromaDB (scripts/ingest_pdfs.py)                     │
 │                                                                     │
 │  [QUERY PHASE] - Every User Request (THIS FILE!)                    │
-│  ═══════════════════════════════════════════════════════════════    │
+│  ═══════════════════════════════════════════════════════════════   │
 │   1. User asks: "How to calculate CGPA?"                            │
 │   2. Convert question → embedding (384-dim vector)                  │
 │   3. Search ChromaDB for similar embeddings                         │
@@ -262,175 +261,183 @@ Slow Queries:
   → Use singleton pattern (get_rag_system())
 """
 
-# ══════════════════════════════════════════════════════════════════════
-# IMPORTS
-# ═════════════════════════════════════════════════════════════════════
-
+# core/rag.py
 import logging
 from pathlib import Path
-from typing import List,Dict,Optional, Any
-import chromadb
-from chromadb.config import Settings
-from chromadb.utils import embedding_functions
+from typing import List, Dict, Optional, Any
 
-
-
-
+# ChromaDB - Vector Database for Embeddings
+import chromadb                           # Main ChromaDB client
+from chromadb.config import Settings      # Configuration options
+from chromadb.utils import embedding_functions  # Built-in embedding models
 
 # ═══════════════════════════════════════════════════════════════════════
 # LOGGING CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════
-
+# Display INFO level messages during RAG operations
+# Shows: initialization status, search results, errors
 logging.basicConfig(level=logging.INFO)
-logger=logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
-# ══════════════════════════════════════════════════════════════════════
-# RAG SYSTEM CLASS
-# ══════════════════════════════════════════════════════════════════════
 class RAGSystem:
+    
     def __init__(
-            self,
-            db_path: str= "data/rag_docs",
-            collection_name: str ="campus_docs"
+        self,
+        db_path: str = "data/rag_docs",
+        collection_name: str = "campus_docs"
     ):
+        # Store configuration
+        self.db_path = Path(db_path)
+        self.collection_name = collection_name
         
-      self.db_path=Path(db_path)
-      self.collection_name=collection_name
-
-      try:
-         
-        self.client=chromadb.PersistentClient(
-           path=str(self.db_path),
-           settings=Settings(anonymized_telemetry=False)
-        )
-
-        self.embedding_function=embedding_functions.SentenceTransformerEmbeddingFunction(
-           model_name="all-MiniLM-L6-v2"
-        )
-
-        self.collection=self.client.get_or_create_collection(
-           name=self.collection_name,
-           embedding_fucntion=self.embedding_function,
-           metadata={"description":"Campus documents for RAG"}
-        )
-
-        logger.info(f"RAG System initialised: {self.collection.count()} documents")
-
-      except Exception as e:
-         logger.error(f"failed to initialised RAG System: {e}")
-         raise RuntimeError(f"ChromaDB initialization failed: {e}")
-      
-    def search_documents(
-          self,
-          query: str,
-          top_k: int= 3,
-          min_score: float=0.3
-    ) ->List[Dict[str,Any]]:
-       
-       try:
-          
-          results=self.collection.query(
-             query_texts=[query],
-             n_results=top_k
-          )
-
-          documents=[]
-          if results and results['documents'] and results['documents'][0]:
-             for i,doc_text in enumerate(results['documents'][0]):
-                distance=results['documents'][0][i] if results['distances'] else 0
-                similarity = 1-distance
-
-                if similarity>=min_score:
-                   documents.append({
-                      'content':doc_text,
-                      'relevance_score':similarity,
-                      'metadata':results['metadatas'][0][i] if results['metadata'] else{}
-                   })
-          return documents
-       
-       except Exception as e:
-          logger.error(f"Error searching documents: {e}")
-          return []
-       
-    def get_collection_stats(self)-> Dict[str,Any]:
-       
         try:
-          return{
-             'count': self.collection.count(),
-             'name': self.collection_name,
-             'path':str(self.db_path)
-          }
+            # ═══════════════════════════════════════════════════════════
+            # STEP 1: Initialize ChromaDB Client
+            # ═══════════════════════════════════════════════════════════
+            # PersistentClient: Data stored on disk (survives restarts)
+            # Alternative: EphemeralClient (in-memory, for testing)
+            self.client = chromadb.PersistentClient(
+                path=str(self.db_path),  # Where to store data
+                settings=Settings(
+                    anonymized_telemetry=False  # Disable usage tracking
+                )
+            )
+            
+            # ═══════════════════════════════════════════════════════════
+            # STEP 2: Load Embedding Model
+            # ═══════════════════════════════════════════════════════════
+            self.embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
+                model_name="all-MiniLM-L6-v2"
+            )
+            
+            # ═══════════════════════════════════════════════════════════
+            # STEP 3: Get or Create Collection
+            # ═══════════════════════════════════════════════════════════
+            self.collection = self.client.get_or_create_collection(
+                name=self.collection_name,
+                embedding_function=self.embedding_function,
+                metadata={"description": "Campus documents for RAG"}
+            )
+            
+            # ═══════════════════════════════════════════════════════════
+            # STEP 4: Validate and Log Status
+            # ═══════════════════════════════════════════════════════════
+            doc_count = self.collection.count()
+            logger.info(f"✓ RAG System initialized: {doc_count} documents in '{self.collection_name}'")
+            
+            # Warn if collection is empty
+            if doc_count == 0:
+                logger.warning("⚠️ Collection is empty! Run ingestion first: python scripts/ingest_pdfs.py")
+                
         except Exception as e:
-          logger.error(f"Error getting collection stats: {e}")
-          return {'count': 0, 'error': str(e)}
+            # Log detailed error for debugging
+            logger.error(f"Failed to initialize RAG system: {e}")
+            logger.error(f"  DB Path: {self.db_path}")
+            logger.error(f"  Collection: {self.collection_name}")
+            
+            # Raise with context for caller
+            raise RuntimeError(f"ChromaDB initialization failed: {e}")
+    
+    def search_documents(
+        self,
+        query: str,
+        top_k: int = 3,
+        min_score: float = 0.3
+    ) -> List[Dict[str, Any]]:
+        try:
+            results = self.collection.query(
+                query_texts=[query],  # Can query multiple texts at once
+                n_results=top_k       # How many results to return
+            )
+            
+            # ═══════════════════════════════════════════════════════════
+            # STEP 2: Format and Filter Results
+            # ═══════════════════════════════════════════════════════════
+            documents = []
+            
+            # Check if results are valid
+            if results and results['documents'] and results['documents'][0]:
+                # Process each returned document
+                for i, doc_text in enumerate(results['documents'][0]):
+                    distance = results['distances'][0][i] if results['distances'] else 0
+                    similarity = 1 - distance
+                    
+                    if similarity >= min_score:
+                        documents.append({
+                            'content': doc_text,           # Chunk text
+                            'relevance_score': similarity, # 0-1 similarity
+                            'metadata': results['metadatas'][0][i] if results['metadatas'] else {}
+                        })
+            
+            # Log search results for debugging
+            logger.info(f"Search: '{query[:50]}...' → {len(documents)} results (top_k={top_k}, min_score={min_score})")
+            
+            return documents
+            
+        except Exception as e:
+            # Log error but don't crash
+            # Allows application to continue even if search fails
+            logger.error(f"Error searching documents: {e}")
+            logger.error(f"  Query: {query}")
+            logger.error(f"  Collection: {self.collection_name}")
+            return []
+    
+    def get_collection_stats(self) -> Dict[str, Any]:
+        try:
+            return {
+                'count': self.collection.count(),  # Total documents stored
+                'name': self.collection_name,      # Collection name
+                'path': str(self.db_path)         # Database location
+            }
+        except Exception as e:
+            logger.error(f"Error getting collection stats: {e}")
+            return {'count': 0, 'error': str(e)}
+
+def query_rag(query: str, top_k: int = 3) -> List[Dict[str, Any]]:
+    try:
+        # Initialize RAG system (creates new instance each time - not optimal!)
+        rag_system = RAGSystem()
+        documents = rag_system.search_documents(query, top_k=top_k)
         
-
-def query_rag(query:str, top_k:int=3)-> List[Dict[str,Any]]:
-   try:
-      rag_system=RAGSystem()
-      documents=rag_system.search_documents(query,top_k=top_k)
-
-      results=[]
-      for doc in documents:
-         results.append({
-            "score": doc['relevance_score'],
-            "text":doc['content'][:200],
-            "metadata":doc.get('metadata',{})
-         })
-
-         return results
-      
-   except Exception as e:
-      logger.error(f"Error in query_rag: {e}")
-      return []
-   
-
-
-_rag_system_instance=None
-
-def get_rag_system()->RAGSystem:
-   
-   global _rag_system_instance
-   if _rag_system_instance is None:
-      _rag_system_instance= RAGSystem()
-   return _rag_system_instance
-
-
-
-
-
-
-
-# ══════════════════════════════════════════════════════════════════════
-# LEGACY QUERY FUNCTION FOR BACKWARD COMPATIBILITY
-# ══════════════════════════════════════════════════════════════════════
-
-# def query_rag(query: str, top_k: int = 3) -> List[Dict[str, Any]]:
-#         try:
-#           rag_system = RAGSystem()
-#           documents = rag_system.search_documents(query, top_k=top_k)
-#           results = []
-#           for doc in documents:
-#             results.append({
-#                 "score": doc['relevance_score'],    
-#                 "text": doc['content'][:200],        
-#                 "metadata": doc.get('metadata', {})  
-#             })
+        # ═══════════════════════════════════════════════════════════════
+        # Convert to Legacy Format
+        # ═══════════════════════════════════════════════════════════════
+        # Old code expects: {'score', 'text', 'metadata'}
+        # New code returns: {'relevance_score', 'content', 'metadata'}
+        # This conversion maintains backward compatibility
+        results = []
+        for doc in documents:
+            results.append({
+                "score": doc['relevance_score'],    # Rename for compatibility
+                "text": doc['content'][:200],        # Truncate (old behavior)
+                "metadata": doc.get('metadata', {})  # Preserve metadata
+            })
         
-#           return results
-
-#         except Exception as e:
-#           logger.error(f"Error in query_rag: {e}")
-#           return []       
-
-# ===========================================================================
-# SINGLETON RAG SYSTEM INSTANCE
-# ===========================================================================
+        return results
+        
+    except Exception as e:
+        logger.error(f"Error in query_rag: {e}")
+        return []
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# SINGLETON PATTERN FOR RAG SYSTEM
+# ═══════════════════════════════════════════════════════════════════════
+# Global variable to store single RAG instance
+# Initialized to None, created on first access
+_rag_system_instance = None
 
-
-# ===========================================================================
-# GET RAG SYSTEM SINGLETON
-# ===========================================================================
+def get_rag_system() -> RAGSystem:
+    global _rag_system_instance
+    
+    # Check if instance already exists
+    if _rag_system_instance is None:
+        # First call: create new instance
+        logger.info("Initializing singleton RAG system...")
+        _rag_system_instance = RAGSystem()
+    else:
+        # Subsequent calls: reuse existing instance
+        logger.debug("Reusing existing RAG system instance")
+    
+    return _rag_system_instance

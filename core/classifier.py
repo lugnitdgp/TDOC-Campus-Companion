@@ -362,7 +362,7 @@ from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
 
 import numpy as np
-from sklearn.feature_extraction.text import TfidVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 import joblib
@@ -517,7 +517,7 @@ class MLClassifier :
     def train(self, X:List[str],y:List[str]):
         
         self.model = Pipeline([
-            ('tfidf',TfidVectorizer(
+            ('tfidf',TfidfVectorizer(
                 ngram_range=(1,2),
                 max_features = 5000
             )),
@@ -529,7 +529,7 @@ class MLClassifier :
         self.model.fit(X,y)
         self.is_trained = True
 
-        logger.infp (f"ML classifier trained on {len(X)} samples")
+        logger.info (f"ML classifier trained on {len(X)} samples")
 
     def predict(self,text:str)->IntentResult:
       if not self.is_trained:
@@ -657,7 +657,7 @@ class UnifiedClassifier :
 
         final_intents = []
 
-        for intent, scores in intent_scores.item():
+        for intent, scores in intent_scores.items():
             weighted_score = max(scores)
             best_result = max(
                 [r for r in all_results if r.intent==intent],
@@ -665,7 +665,7 @@ class UnifiedClassifier :
             )
             method = best_result.method
 
-            final_intents.append(IntentResult(intent,weighted_score,reverse=True))
+            final_intents.append(IntentResult(intent,weighted_score,method))
         
 
         final_intents.sort(key= lambda x: x.confidence, reverse=True)
