@@ -107,73 +107,79 @@ Once running:
 • Swagger UI (/docs) is auto-generated for testing APIs
 """
 
-# ═════════════════════════════════════════════════════════════════════
-# IMPORTS
-# ═════════════════════════════════════════════════════════════════════
-
-
-
-
-
-
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from api.routers import chat
+from db.session import init_db
 
 # ═══════════════════════════════════════════════════════════════════════
 # CREATE FASTAPI APPLICATION
 # ═══════════════════════════════════════════════════════════════════════
-
-
-
-
-
-
+# This is the main application object that handles all HTTP requests
+# Title, description, version appear in auto-generated API docs at /docs
+app = FastAPI(
+    title="Campus Companion API",
+    description="AI-powered chatbot for campus queries",
+    version="1.0.0"
+)
 
 # ═══════════════════════════════════════════════════════════════════════
 # CORS MIDDLEWARE CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════
-
-
-
-
-
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],        # ← Change this in production!
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ═══════════════════════════════════════════════════════════════════════
 # DATABASE INITIALIZATION
 # ═══════════════════════════════════════════════════════════════════════
-
-
-
-
-
-
+init_db()
 
 # ═══════════════════════════════════════════════════════════════════════
 # REGISTER API ROUTES
 # ═══════════════════════════════════════════════════════════════════════
-
-
-
-
-
+app.include_router(chat.router, prefix="/api", tags=["chat"])
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # ROOT ENDPOINT
 # ═══════════════════════════════════════════════════════════════════════
-
-
-
-
-
+@app.get("/")
+async def root():
+    """
+    Root endpoint - Simple welcome message
+    
+    Returns:
+        dict: Basic API information
+    """
+    return {
+        "message": "Welcome to Campus Companion API",
+        "status": "running",
+        "version": "1.0.0",
+        "docs": "/docs",  # Where to find API documentation
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # HEALTH CHECK ENDPOINT
 # ═══════════════════════════════════════════════════════════════════════
-
-
-
-
+@app.get("/health")
+async def health_check():
+    """
+    Health check endpoint for monitoring
+    
+    Returns:
+        dict: Health status information
+    """
+    return {
+        "status": "healthy",
+        "service": "Campus Companion API",
+        "version": "1.0.0"
+    }
 
 
 
